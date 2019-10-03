@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import pandas
+import pickle
 #import seaborn as sns
 
 from sklearn.pipeline import Pipeline, make_union, make_pipeline
@@ -24,12 +25,23 @@ kf = KFold(n_splits=5, shuffle=True, random_state=421)
 
 import matplotlib.pyplot as plt
 
+# simple UI using Argparse
+
 import argparse
+import re
+
+def tensorflow_model_valid(s, pat=re.compile(r"^.*\.ckpt$")):
+    if not pat.match(s):
+        raise argparse.ArgumentTypeError
+    return s
+
 parser = argparse.ArgumentParser(description='Using Tensorflow and and SciKit-Learn \
                                               for solving Kaggle`s Titanic problem.')
 
 parser.add_argument('-tf', '--tensor-flow', help='use Tensorflow', action='store_true')
-parser.add_argument('-m', '--model', help='path to the model')
+parser.add_argument('-d', '--data', help='path to input data', required=True)
+parser.add_argument('-m', '--model', help='path to the model (must end with .ckpt)', \
+                                            required=True, type=tensorflow_model_valid)
     
 
 def load_data_for_kaggle(data_path='DATA'):
@@ -223,12 +235,24 @@ preprocess_pipeline = Pipeline(steps=[
     ('binary', BinaryTransform()),
     ('drop', DroppingTransform()),
 ])
-
+    
 
 if __name__ == "__main__":
     
     args = vars(parser.parse_args())
+    X_test = pd.read_csv(args["data"])
+    X_test = preprocess_pipeline.transform(X_test)
+    
     if args['tensor_flow'] == True:
-        pass
+        saver = tf.train.import_meta_graph(args["model"] + ".meta")
+        with tf.Session() as sess:
+            saver.restore(sess, args["model"])
+            y_pred = sess.run(tf.cast(tf.round(outputs), dtype=tf.int32), feed_dict={X: X_test})
+        
     else:
-        pass
+        model = pickle.load(open(args['model'], 'rb'))
+        y_pred = model.predict(X_test)
+        y_pred.to_csv("output.csv", index=False)
+
+    output = pandas.DataFrame(data=y_pred, columns=["Survived"])
+    output.to_csv('output.csv', index=False)
