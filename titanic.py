@@ -245,6 +245,7 @@ if __name__ == "__main__":
     
     if args['tensor_flow'] == True:
         saver = tf.train.import_meta_graph(args["model"] + ".meta")
+        outputs = tf.get_default_graph().get_tensor_by_name("outputs:0")
         with tf.Session() as sess:
             saver.restore(sess, args["model"])
             y_pred = sess.run(tf.cast(tf.round(outputs), dtype=tf.int32), feed_dict={X: X_test})
